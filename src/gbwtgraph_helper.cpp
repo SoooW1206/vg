@@ -20,6 +20,7 @@ constexpr size_t MinimizerIndexParameters::ZIPCODE_PAYLOAD_SIZE;
 
 // Other static members.
 const std::string MinimizerIndexParameters::PAYLOAD_KEY = "payload";
+const std::string MinimizerIndexParameters::MINIMAXMER_KEY = "minimaxmer_counts";
 
 //------------------------------------------------------------------------------
 
@@ -334,6 +335,10 @@ std::string MinimizerIndexParameters::validate() const {
         }
     }
 
+    if (!this->minimaxmer_counts.empty() && (this->use_syncmers || this->use_weighted_minimizers)) {
+        return "minimaxmers cannot be used with syncmers or weighted minimizers";
+    }
+
     if (this->use_weighted_minimizers) {
         if (this->iterations > MAX_ITERATIONS) {
             return "number of iterations must be at most " + std::to_string(MAX_ITERATIONS) + " when using weighted minimizers";
@@ -583,6 +588,14 @@ gbwtgraph::DefaultMinimizerIndex build_minimizer_index(
     }
     index.set_tag(MinimizerIndexParameters::PAYLOAD_KEY, payload_str);
 
+    // Minimaxmers select by counts. Only the fingerprint of the counts goes into the index.
+    std::unique_ptr<gbwtgraph::MinimaxCounts> minimaxmer_counts;
+    if (!params.minimaxmer_counts.empty()) {
+        minimaxmer_counts = load_minimaxmer_counts(params.minimaxmer_counts);
+        index.set_tag(MinimizerIndexParameters::MINIMAXMER_KEY, minimaxmer_counts->fingerprint());
+        use_minimaxmer_counts(index, minimaxmer_counts.get());
+    }
+
     // Build the index.
     if (params.progress) {
         auto s = logger.info() << "Building MinimizerIndex with k = " << index.k();
@@ -630,7 +643,45 @@ gbwtgraph::DefaultMinimizerIndex build_minimizer_index(
         logger.info() << "Construction time: " << seconds << " seconds" << std::endl;
     }
 
+    // The counts are freed when we return.
+    index.set_minimaxmer_counts(nullptr);
     return index;
+}
+
+std::unique_ptr<gbwtgraph::MinimaxCounts> load_minimaxmer_counts(const std::string& filename) {
+    Logger logger("minimaxmer");
+    double start = gbwt::readTimer();
+    std::unique_ptr<gbwtgraph::MinimaxCounts> counts;
+    try {
+        counts.reset(new gbwtgraph::MinimaxCounts(filename));
+    } catch (const std::runtime_error& e) {
+        logger.error() << e.what() << std::endl;
+    }
+    logger.info() << "Loaded minimaxmer counts from " << filename << ": k = " << counts->k() << ", "
+                  << counts->size() << " entries, fingerprint " << counts->fingerprint() << ", "
+                  << (gbwt::readTimer() - start) << " seconds" << std::endl;
+    return counts;
+}
+
+void use_minimaxmer_counts(gbwtgraph::DefaultMinimizerIndex& index, const gbwtgraph::MinimaxCounts* counts) {
+    Logger logger("minimaxmer");
+    std::string tag = index.get_tag(MinimizerIndexParameters::MINIMAXMER_KEY);
+    if (counts == nullptr) {
+        if (!tag.empty()) {
+            logger.error() << "the minimizer index was built with minimaxmer counts (" << tag
+                           << "); give them with --minimaxmer-counts" << std::endl;
+        }
+        return;
+    }
+    if (tag != counts->fingerprint()) {
+        logger.error() << "minimaxmer counts (" << counts->fingerprint() << ") do not match the minimizer index ("
+                       << (tag.empty() ? "built without minimaxmer counts" : tag) << ")" << std::endl;
+    }
+    try {
+        index.set_minimaxmer_counts(counts);
+    } catch (const std::runtime_error& e) {
+        logger.error() << e.what() << std::endl;
+    }
 }
 
 void require_payload(const gbwtgraph::DefaultMinimizerIndex& index, MinimizerIndexParameters::PayloadType expected_payload) {

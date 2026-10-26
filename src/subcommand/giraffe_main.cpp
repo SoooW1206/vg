@@ -711,6 +711,10 @@ void help_giraffe(char** argv, const BaseOptionGroup& parser, const std::map<std
          << "      --num-haplotypes N        haplotypes candidates to sample (default: " << IndexingParameters::haplotype_sampling_num_haplotypes << ")" << endl
          << "      --no-diploid-sampling     turn off downsampling candidates to best diploid" << endl;
 
+    cerr << "minimaxmers (Yoshi Suzuki's himapper_rp):" << endl
+         << "      --minimaxmer-counts FILE  counts the minimizer index was built with" << endl
+         << "                                (required for such an index)" << endl;
+
     cerr << "alternate graphs:" << endl
          << "  -x, --xg-name FILE            map to this graph (if no -Z / -g)," << endl
          << "                                or use this graph for HTSLib output" << endl
@@ -805,6 +809,7 @@ int main_giraffe(int argc, char** argv) {
     constexpr int OPT_HAPLOTYPE_SAMPLING = 1104;
     constexpr int OPT_NUM_HAPLOTYPES = 1105;
     constexpr int OPT_NO_DIPLOID_SAMPLING = 1106;
+    constexpr int OPT_MINIMAXMER_COUNTS = 1107;
 
     constexpr int OPT_TRACK_PROVENANCE = 1201;
     constexpr int OPT_TRACK_CORRECTNESS = 1202;
@@ -828,6 +833,9 @@ int main_giraffe(int argc, char** argv) {
 
     // For haplotype sampling.
     string kff_filename;
+
+    // Minimaxmer counts the minimizer index was built with.
+    string minimaxmer_counts_name;
     bool haplotype_sampling_flag = false;
     gbwtgraph::sample_name_set reference_samples;
 
@@ -1152,6 +1160,7 @@ int main_giraffe(int argc, char** argv) {
         {"haplotype-sampling", no_argument, 0, OPT_HAPLOTYPE_SAMPLING},
         {"haplotype-name", required_argument, 0, OPT_HAPLOTYPE_NAME},
         {"kff-name", required_argument, 0, OPT_KFF_NAME},
+        {"minimaxmer-counts", required_argument, 0, OPT_MINIMAXMER_COUNTS},
         {"set-reference", required_argument, 0, OPT_SET_REFERENCE},
         {"num-haplotypes", required_argument, 0, OPT_NUM_HAPLOTYPES},
         {"no-diploid-sampling", no_argument, 0, OPT_NO_DIPLOID_SAMPLING},
@@ -1281,6 +1290,10 @@ int main_giraffe(int argc, char** argv) {
                 // We need to provide the KFF with sample scope if we provide
                 // it, but we're not sure of the sample name yet.
                 kff_filename = require_exists(logger, optarg);
+                break;
+
+            case OPT_MINIMAXMER_COUNTS:
+                minimaxmer_counts_name = require_exists(logger, optarg);
                 break;
 
             case OPT_SET_REFERENCE:
@@ -1823,6 +1836,13 @@ int main_giraffe(int argc, char** argv) {
         logger.error() << registry.require("Giraffe Distance Index").at(0) << " is newer than " << registry.require(minimizer_indexname).at(0) << " which depends on it" << std::endl;
     }
     minimizer_index = vg::io::VPKG::load_one<gbwtgraph::DefaultMinimizerIndex>(registry.require(minimizer_indexname).at(0));
+
+    // Minimaxmer counts must outlive the mapping. use_minimaxmer_counts() checks them against the index.
+    std::unique_ptr<gbwtgraph::MinimaxCounts> minimaxmer_counts;
+    if (!minimaxmer_counts_name.empty()) {
+        minimaxmer_counts = load_minimaxmer_counts(minimaxmer_counts_name);
+    }
+    use_minimaxmer_counts(*minimizer_index, minimaxmer_counts.get());
 
     // Decide if we want to do recombination-aware mapping by default, based on whether we can.
     

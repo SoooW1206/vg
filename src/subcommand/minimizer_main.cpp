@@ -159,6 +159,10 @@ void help_minimizer(char** argv) {
     std::cerr << "      --hash-table N         use 2^N-cell hash tables for kmer counting" << std::endl;
     std::cerr << "                             (default: guess)" << std::endl;
     std::cerr << std::endl;
+    std::cerr << "Minimaxmers (Yoshi Suzuki's himapper_rp):" << std::endl;
+    std::cerr << "      --minimaxmer-counts FILE  select by these counts (seed-eval minimax_counts);" << std::endl;
+    std::cerr << "                             giraffe needs the same file" << std::endl;
+    std::cerr << std::endl;
     std::cerr << "Other options:" << std::endl;
     std::cerr << "  -z, --zipcode-name FILE    store the distances that are too big in a file" << std::endl;
     std::cerr << "                             if no -z, some distances may be discarded" << std::endl;
@@ -185,6 +189,7 @@ MinimizerConfig::MinimizerConfig(int argc, char** argv, int max_threads, const L
     constexpr int OPT_FAST_COUNTING = 1003;
     constexpr int OPT_SAVE_MEMORY = 1004;
     constexpr int OPT_HASH_TABLE = 1005;
+    constexpr int OPT_MINIMAXMER_COUNTS = 1006;
     constexpr int OPT_NO_DIST = 1100;
 
     int c;
@@ -204,6 +209,7 @@ MinimizerConfig::MinimizerConfig(int argc, char** argv, int max_threads, const L
             { "fast-counting", no_argument, 0, OPT_FAST_COUNTING },
             { "save-memory", no_argument, 0, OPT_SAVE_MEMORY },
             { "hash-table", required_argument, 0, OPT_HASH_TABLE },
+            { "minimaxmer-counts", required_argument, 0, OPT_MINIMAXMER_COUNTS },
             { "zipcode-name", required_argument, 0, 'z' },
             { "progress", no_argument, 0, 'p' },
             { "threads", required_argument, 0, 't' },
@@ -256,6 +262,9 @@ MinimizerConfig::MinimizerConfig(int argc, char** argv, int max_threads, const L
             break;
         case OPT_HASH_TABLE:
             this->params.hash_table_width = parse<size_t>(optarg);
+            break;
+        case OPT_MINIMAXMER_COUNTS:
+            this->params.minimaxmer_counts = optarg;
             break;
 
         case 'z':

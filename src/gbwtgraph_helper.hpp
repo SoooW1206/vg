@@ -13,6 +13,7 @@
 #include "snarl_distance_index.hpp"
 #include "zip_code.hpp"
 
+#include <memory>
 #include <vector>
 #include <unordered_map>
 
@@ -163,6 +164,9 @@ struct MinimizerIndexParameters {
     /// Tag used to indicate the payload type in the minimizer index.
     const static std::string PAYLOAD_KEY; // "payload"
 
+    /// Tag with the fingerprint of the minimaxmer counts the index was built with.
+    const static std::string MINIMAXMER_KEY; // "minimaxmer_counts"
+
     /// k-mer length.
     size_t k = gbwtgraph::DefaultMinimizerIndex::key_type::KMER_LENGTH;
 
@@ -189,6 +193,10 @@ struct MinimizerIndexParameters {
 
     /// Print progress information during construction.
     bool progress = false;
+
+    /// Minimaxmer counts file from seed-eval's minimax_counts (empty: plain minimizers).
+    /// Minimaxmers are from Yoshi Suzuki's himapper_rp.
+    std::string minimaxmer_counts;
 
     /// Sets minimizer parameters.
     MinimizerIndexParameters& minimizers(size_t k, size_t w) {
@@ -250,6 +258,15 @@ gbwtgraph::DefaultMinimizerIndex build_minimizer_index(
     const MinimizerIndexParameters& params,
     bool require_path_payloads = false
 );
+
+/// Loads minimaxmer counts and logs k, the number of entries, the fingerprint and the load time.
+/// Prints an error message and exits on failure.
+std::unique_ptr<gbwtgraph::MinimaxCounts> load_minimaxmer_counts(const std::string& filename);
+
+/// Checks the counts against tag "minimaxmer_counts" of the index and attaches them: an index built
+/// with counts needs the same counts (same fingerprint), and one built without needs none (nullptr).
+/// The counts must outlive the use of the index. Prints an error message and exits on failure.
+void use_minimaxmer_counts(gbwtgraph::DefaultMinimizerIndex& index, const gbwtgraph::MinimaxCounts* counts);
 
 /// Checks that the minimizer index has the expected payload type.
 ///
